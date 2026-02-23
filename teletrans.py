@@ -253,7 +253,7 @@ async def translate_llm(text: str, source_lang: str, target_lang: str, session: 
         model = f"gemini/{gemini_model}"
         api_key = gemini_api_key
         temperature = gemini_temperature
-        extra_params = {}
+        extra_params = {'reasoning_effort': 'none'}
     else:
         raise ValueError(f"LLM translation not configured for: {translation_service}")
 
