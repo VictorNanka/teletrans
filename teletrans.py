@@ -25,25 +25,25 @@ from telethon.tl.types import MessageEntityBlockquote
 
 workspace = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
 
-# 创建一个logger
+# Create logger
 logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
-# 创建一个handler，用于写入日志文件
-handler = RotatingFileHandler('%s/log.txt' % workspace, maxBytes=20000000, backupCount=5)
+# Create handler for log file
+handler = RotatingFileHandler(f'{workspace}/log.txt', maxBytes=20000000, backupCount=5)
 
-# 定义handler的输出格式
+# Define output format
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 
-# 给logger添加handler
+# Add handler to logger
 logger.addHandler(handler)
 
-# 创建一个handler，用于输出到控制台
+# Create handler for console output
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 
-# 给logger添加handler
+# Add handler to logger
 logger.addHandler(stream_handler)
 
 detector = LanguageDetectorBuilder.from_all_languages().with_preloaded_language_models().build()
@@ -51,21 +51,21 @@ all_langs = Language.all()
 all_langs = {lang.iso_code_639_1.name.lower(): lang.name for lang in all_langs}
 
 
-def load_config():
+def load_config() -> dict:
     # load config from json file, check if the file exists first
-    if not os.path.exists('%s/config.json' % workspace):
+    if not os.path.exists(f'{workspace}/config.json'):
         logger.error('config.json not found, created an empty one')
         exit()
 
-    with open('%s/config.json' % workspace, 'r') as f:
+    with open(f'{workspace}/config.json', 'r') as f:
         config = json.load(f)
 
     return config
 
 
-def save_config():
+def save_config() -> None:
     cfg['target_config'] = target_config
-    with open('%s/config.json' % workspace, 'w') as f:
+    with open(f'{workspace}/config.json', 'w') as f:
         json.dump(cfg, f, indent=2)
 
 
@@ -75,38 +75,38 @@ cfg = load_config()
 api_id = cfg['api_id']
 api_hash = cfg['api_hash']
 ## Block quote will be collapsed if the length of the text exceeds this value
-collapsed_length = cfg['collapsed_length'] if 'collapsed_length' in cfg else 0
+collapsed_length = cfg.get('collapsed_length', 0)
 ## translation service
 translation_service = cfg['translation_service']
 ## google config
-google_config = cfg['google'] if 'google' in cfg else {}
-google_creds = google_config['creds'] if 'creds' in google_config else ''
+google_config = cfg.get('google', {})
+google_creds = google_config.get('creds', '')
 ## azure config
-azure_config = cfg['azure'] if 'azure' in cfg else {}
-azure_key = azure_config['key'] if 'key' in azure_config else ''
-azure_endpoint = azure_config['endpoint'] if 'endpoint' in azure_config else ''
-azure_region = azure_config['region'] if 'region' in azure_config else ''
+azure_config = cfg.get('azure', {})
+azure_key = azure_config.get('key', '')
+azure_endpoint = azure_config.get('endpoint', '')
+azure_region = azure_config.get('region', '')
 ## deeplx config
-deeplx_config = cfg['deeplx'] if 'deeplx' in cfg else {}
-deeplx_url = deeplx_config['url'] if 'url' in deeplx_config else 'https://api.deeplx.org/translate'
+deeplx_config = cfg.get('deeplx', {})
+deeplx_url = deeplx_config.get('url', 'https://api.deeplx.org/translate')
 ## openai config
-openai_config = cfg['openai'] if 'openai' in cfg else {}
-openai_api_key = openai_config['api_key'] if 'api_key' in openai_config else ''
-openai_url = openai_config['url'] if 'url' in openai_config else 'https://api.openai.com/v1/chat/completions'
-openai_model = openai_config['model'] if 'model' in openai_config else 'gpt-3.5-turbo'
-openai_prompt = openai_config['prompt'] if 'prompt' in openai_config else ''
-openai_temperature = openai_config['temperature'] if 'temperature' in openai_config else 0.5
+openai_config = cfg.get('openai', {})
+openai_api_key = openai_config.get('api_key', '')
+openai_url = openai_config.get('url', 'https://api.openai.com/v1/chat/completions')
+openai_model = openai_config.get('model', 'gpt-3.5-turbo')
+openai_prompt = openai_config.get('prompt', '')
+openai_temperature = openai_config.get('temperature', 0.5)
 ## gemini config
-gemini_config = cfg['gemini'] if 'gemini' in cfg else {}
-gemini_api_key = gemini_config['api_key'] if 'api_key' in gemini_config else ''
-gemini_model = gemini_config['model'] if 'model' in gemini_config else ''
-gemini_prompt = gemini_config['prompt'] if 'prompt' in gemini_config else ''
-gemini_temperature = gemini_config['temperature'] if 'temperature' in gemini_config else 0.5
+gemini_config = cfg.get('gemini', {})
+gemini_api_key = gemini_config.get('api_key', '')
+gemini_model = gemini_config.get('model', '')
+gemini_prompt = gemini_config.get('prompt', '')
+gemini_temperature = gemini_config.get('temperature', 0.5)
 ## target config
-target_config = cfg['target_config'] if 'target_config' in cfg else {}
+target_config = cfg.get('target_config', {})
 
-# 初始化Telegram客户端。
-client = TelegramClient('%s/client' % workspace, api_id, api_hash)
+# Initialize Telegram client
+client = TelegramClient(f'{workspace}/client', api_id, api_hash)
 
 # Google Translation Service Initialization
 if translation_service == 'google':
@@ -130,14 +130,14 @@ if translation_service == 'gemini':
     gemini_client = genai.Client(api_key=gemini_api_key)
 
 
-def remove_links(text):
+def remove_links(text: str) -> str:
     # regrex pattern for URL
     url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     # use re.sub to remove the URL from the text
     return re.sub(url_pattern, '', text).strip()
 
 
-async def translate_text(text, source_lang, target_langs) -> {}:
+async def translate_text(text: str, source_lang: str, target_langs: list[str]) -> dict[str, str]:
     result = {}
     if emoji.purely_emoji(text):
         return result
@@ -164,27 +164,27 @@ async def translate_text(text, source_lang, target_langs) -> {}:
             else:
                 raise Exception(
                     f"Unknown translation service: {translation_service}. Available services: openai, google, azure, deeplx")
-        # 并发执行翻译任务。
+        # Execute translation tasks concurrently
         for lang, text in await asyncio.gather(*tasks):
             result[lang] = text
     return result
 
 
-# 翻译google API函数
-async def translate_google(text, source_lang, target_lang, session):
+# Google Translation API
+async def translate_google(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
     if isinstance(text, bytes):
         text = text.decode("utf-8")
 
     result = google_client.translate(text, target_language=target_lang, format_='text')
-    logger.info("Text: {}".format(result["input"]))
-    logger.info("Translation: {}".format(result["translatedText"]))
-    logger.info("Detected source language: {}".format(result["detectedSourceLanguage"]))
+    logger.info(f'Text: {result["input"]}')
+    logger.info(f'Translation: {result["translatedText"]}')
+    logger.info(f'Detected source language: {result["detectedSourceLanguage"]}')
 
     return target_lang, result["translatedText"]
 
 
-# 翻译deeplx API函数
-async def translate_deeplx(text, source_lang, target_lang, session):
+# DeepLX Translation API
+async def translate_deeplx(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
     url = deeplx_url
     payload = {
         "text": text,
@@ -193,21 +193,21 @@ async def translate_deeplx(text, source_lang, target_lang, session):
     }
     start_time = time.time()
     async with session.post(url, json=payload) as response:
-        logger.info(f"翻译从 {source_lang} 至 {target_lang} 耗时: {time.time() - start_time}")
+        logger.info(f"Translation from {source_lang} to {target_lang} took: {time.time() - start_time}")
         if response.status != 200:
-            logger.error(f"翻译失败：{response.status}")
-            raise Exception(f"翻译失败")
+            logger.error(f"Translation failed: {response.status}")
+            raise Exception(f"Translation failed")
 
         result = await response.json()
         if result['code'] != 200:
-            logger.error(f"翻译失败：{result}")
-            raise Exception(f"翻译失败")
+            logger.error(f"Translation failed: {result}")
+            raise Exception(f"Translation failed")
 
     return target_lang, result['data']
 
 
-# 翻译Azure API函数
-async def translate_azure(text, source_lang, target_lang, session):
+# Azure Translation API
+async def translate_azure(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
     try:
         source_language = source_lang
         target_languages = [target_lang]
@@ -230,16 +230,16 @@ async def translate_azure(text, source_lang, target_lang, session):
         raise
 
 
-# 翻译openai API函数
-async def translate_openai(text, source_lang, target_lang, session):
+# OpenAI Translation API
+async def translate_openai(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
     url = openai_url
     headers = {
-        "Authorization": "Bearer %s" % openai_api_key,
+        "Authorization": f"Bearer {openai_api_key}",
         "Content-Type": "application/json"
     }
     prompt = openai_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
     text = "Source Text: \n" + text
-    print(f"Prompt: {prompt}")
+    logger.debug(f"Prompt: {prompt}")
     payload = {
         'messages': [
             {
@@ -262,16 +262,16 @@ async def translate_openai(text, source_lang, target_lang, session):
 
     start_time = time.time()
     async with session.post(url, headers=headers, data=json.dumps(payload)) as response:
-        logger.info(f"翻译从 {source_lang} 至 {target_lang} 耗时: {time.time() - start_time}")
+        logger.info(f"Translation from {source_lang} to {target_lang} took: {time.time() - start_time}")
         response_text = await response.text()
         result = json.loads(response_text)
         try:
             return target_lang, result['choices'][0]['message']['content']
         except Exception as e:
-            raise Exception(f"OpenAI 翻译失败：{response_text} {e}")
+            raise Exception(f"OpenAI translation failed: {response_text} {e}")
 
 
-async def translate_gemini(text, source_lang, target_lang, session):
+async def translate_gemini(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
     prompt = gemini_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
     response = gemini_client.models.generate_content(
         model=gemini_model,
@@ -288,9 +288,9 @@ async def translate_gemini(text, source_lang, target_lang, session):
     return target_lang, response.text.strip()
 
 
-async def command_mode(event, target_key, text):
+async def command_mode(event: events.NewMessage.Event, target_key: str, text: str) -> None:
     if text.startswith('.tt-on-global') or text == '.tt-off-global':
-        target_key = '0.%d' % event.sender_id
+        target_key = f'0.{event.sender_id}'
         text = text.replace('-global', '')
 
     if text == '.tt-off':
@@ -298,34 +298,34 @@ async def command_mode(event, target_key, text):
         if target_key in target_config:
             del target_config[target_key]
             save_config()
-            logger.info("已禁用: %s" % target_key)
+            logger.info(f"Disabled: {target_key}")
         return
 
     if text.startswith('.tt-on,'):
         _, source_lang, target_langs = text.split(',')
         if not source_lang or not target_langs:
-            await event.message.edit("错误命令，正确格式: .tt-on,source_lang,target_lang1|target_lang2")
+            await event.message.edit("Invalid command, correct format: .tt-on,source_lang,target_lang1|target_lang2")
         else:
             target_config[target_key] = {
                 'source_lang': source_lang,
                 'target_langs': target_langs.split('|')
             }
             save_config()
-            logger.info(f"设置成功: {target_config[target_key]}")
-            await event.message.edit("设置成功: %s" % target_config[target_key])
+            logger.info(f"Settings applied: {target_config[target_key]}")
+            await event.message.edit(f"Settings applied: {target_config[target_key]}")
         await asyncio.sleep(3)
         await event.message.delete()
         return
 
     if text.startswith('.tt-skip'):
         await event.message.edit(text[8:].strip())
-        logger.info("跳过翻译")
+        logger.info("Skipped translation")
         return
 
     if text.startswith('.tt-once,'):
         command, raw_text = text.split(' ', 1)
         _, source_lang, target_langs = command.split(',')
-        logger.info(f"翻译消息: {raw_text}")
+        logger.info(f"Translating message: {raw_text}")
         await translate_and_edit(event.message, raw_text, source_lang, target_langs.split('|'))
         return
 
@@ -334,14 +334,14 @@ async def command_mode(event, target_key, text):
     await event.message.delete()
 
 
-# 同时监听新消息事件和编辑消息事件，进行消息处理。
+# Listen for new and edited outgoing messages
 @client.on(events.NewMessage(outgoing=True))
 @client.on(events.MessageEdited(outgoing=True))
-async def handle_message(event):
-    target_key = '%d.%d' % (event.chat_id, event.sender_id)
+async def handle_message(event: events.NewMessage.Event) -> None:
+    target_key = f'{event.chat_id}.{event.sender_id}'
     try:
         message = event.message
-        # 忽略空消息。
+        # Ignore empty messages
         if not message.text:
             return
         message_content = message.text.strip()
@@ -370,7 +370,7 @@ async def handle_message(event):
                 return
             message_content = reply_message.text.strip()
             if source_lang and target_langs:
-                logger.info(f"翻译消息: {message.text}")
+                logger.info(f"Translating message: {message.text}")
                 await translate_and_edit(message, message_content, source_lang, target_langs.split('|'))
             return
 
@@ -387,25 +387,25 @@ async def handle_message(event):
             config = target_config[target_key]
         else:
             # global config
-            target_key = '0.%d' % event.sender_id
+            target_key = f'0.{event.sender_id}'
             if target_key not in target_config:
                 return
             config = target_config[target_key]
 
-        logger.info(f"翻译消息: {message.text}")
+        logger.info(f"Translating message: {message.text}")
         source_lang = config['source_lang']
         target_langs = config['target_langs']
         await translate_and_edit(message, message_content, source_lang, target_langs)
 
     except Exception as e:
-        # 记录处理消息时发生的异常。
+        # Log exception during message handling
         logger.error(f"Error handling message: {e}")
 
 
-async def translate_and_edit(message, message_content, source_lang, target_langs):
-    start_time = time.time()  # 记录开始时间
+async def translate_and_edit(message, message_content: str, source_lang: str, target_langs: list[str]) -> None:
+    start_time = time.time()  # Record start time
     translated_texts = await translate_text(message_content, source_lang, target_langs)
-    logger.info(f"翻译耗时: {time.time() - start_time}")
+    logger.info(f"Translation took: {time.time() - start_time}")
 
     if not translated_texts:
         return
@@ -438,10 +438,10 @@ async def translate_and_edit(message, message_content, source_lang, target_langs
     await client.edit_message(message, modified_message, formatting_entities=formatting_entities)
 
 
-# 启动客户端并保持运行。
+# Start client and run until disconnected
 try:
     client.start()
     client.run_until_disconnected()
 finally:
-    # 断开客户端连接。
+    # Disconnect client
     client.disconnect()
