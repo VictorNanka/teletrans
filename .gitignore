@@ -1,6 +1,8 @@
 config.json
-client.session
+*.session
+*.session-journal
 log.txt
+*.bak
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
