@@ -13,7 +13,8 @@ from logging.handlers import RotatingFileHandler
 import aiohttp
 import emoji
 import litellm
-from azure.ai.translation.text import TextTranslationClient, TranslatorCredential
+from azure.ai.translation.text import TextTranslationClient
+from azure.core.credentials import AzureKeyCredential
 from azure.ai.translation.text.models import InputTextItem
 from azure.core.exceptions import HttpResponseError
 from google.cloud import translate_v2 as translate
@@ -121,8 +122,8 @@ if translation_service == 'azure':
     if not azure_key or not azure_endpoint or not azure_region:
         logger.error("Azure translation service configuration is missing")
         sys.exit(1)
-    text_translator = TextTranslationClient(endpoint=azure_endpoint,
-                                            credential=TranslatorCredential(azure_key, azure_region))
+    text_translator = TextTranslationClient(credential=AzureKeyCredential(azure_key),
+                                            endpoint=azure_endpoint, region=azure_region)
 
 if translation_service == 'gemini':
     if not gemini_api_key:
