@@ -12,8 +12,7 @@ from logging.handlers import RotatingFileHandler
 
 import aiohttp
 import emoji
-from google import genai
-from google.genai import types as genai_types
+import litellm
 from azure.ai.translation.text import TextTranslationClient, TranslatorCredential
 from azure.ai.translation.text.models import InputTextItem
 from azure.core.exceptions import HttpResponseError
@@ -126,9 +125,9 @@ if translation_service == 'azure':
                                             credential=TranslatorCredential(azure_key, azure_region))
 
 if translation_service == 'gemini':
-    if not gemini_config or not gemini_api_key:
+    if not gemini_api_key:
         logger.error("Gemini translation service configuration is missing")
-    gemini_client = genai.Client(api_key=gemini_api_key)
+        sys.exit(1)
 
 
 def remove_links(text: str) -> str:
@@ -233,67 +232,52 @@ async def translate_azure(text: str, source_lang: str, target_lang: str, session
         raise
 
 
-# OpenAI Translation API
-async def translate_openai(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
-    url = openai_url
-    headers = {
-        "Authorization": f"Bearer {openai_api_key}",
-        "Content-Type": "application/json"
-    }
-    prompt = openai_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
-    text = "Source Text: \n" + text
+# LLM Translation (OpenAI-compatible and Gemini via litellm)
+async def translate_llm(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
+    if translation_service == 'openai':
+        prompt = openai_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
+        api_base = openai_url.removesuffix('/chat/completions')
+        model = f"openai/{openai_model}"
+        api_key = openai_api_key
+        temperature = openai_temperature
+        extra_params = {
+            'presence_penalty': 0,
+            'frequency_penalty': 0,
+            'top_p': 1,
+            'thinking': {'type': 'enabled', 'budget_tokens': 0},
+        }
+    elif translation_service == 'gemini':
+        prompt = gemini_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
+        api_base = None
+        model = f"gemini/{gemini_model}"
+        api_key = gemini_api_key
+        temperature = gemini_temperature
+        extra_params = {}
+    else:
+        raise ValueError(f"LLM translation not configured for: {translation_service}")
+
+    text_with_prefix = f"Source Text: \n{text}"
     logger.debug(f"Prompt: {prompt}")
-    payload = {
-        'messages': [
-            {
-                'role': 'system',
-                'content': prompt,
-            },
-            {
-                'role': 'user',
-                'content': text,
-            }
-        ],
-        'stream': False,
-        'model': openai_model,
-        'temperature': openai_temperature,
-        'presence_penalty': 0,
-        'frequency_penalty': 0,
-        'top_p': 1,
-        'thinking': {'type': 'enabled', 'budget_tokens': 0}
-    }
 
     start_time = time.time()
-    async with session.post(url, headers=headers, data=json.dumps(payload)) as response:
-        logger.info(f"Translation from {source_lang} to {target_lang} took: {time.time() - start_time}")
-        response_text = await response.text()
-        result = json.loads(response_text)
-        try:
-            return target_lang, result['choices'][0]['message']['content']
-        except (KeyError, IndexError) as e:
-            raise RuntimeError(f"OpenAI translation failed: {response_text} {e}")
-
-
-async def translate_gemini(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
-    prompt = gemini_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
-    response = gemini_client.models.generate_content(
-        model=gemini_model,
-        contents=text,
-        config=genai_types.GenerateContentConfig(
-            system_instruction=prompt,
-            temperature=gemini_temperature,
-            safety_settings=[genai_types.SafetySetting(
-                category="HARM_CATEGORY_DANGEROUS_CONTENT",
-                threshold="OFF",
-            )],
-        ),
+    response = await litellm.acompletion(
+        model=model,
+        messages=[
+            {'role': 'system', 'content': prompt},
+            {'role': 'user', 'content': text_with_prefix},
+        ],
+        temperature=temperature,
+        api_key=api_key,
+        api_base=api_base,
+        **extra_params,
     )
-    return target_lang, response.text.strip()
+    logger.info(f"Translation from {source_lang} to {target_lang} took: {time.time() - start_time}")
+    return target_lang, response.choices[0].message.content.strip()
 
 
 _TRANSLATION_DISPATCH.update({
-    'openai': translate_openai,
-    'gemini': translate_gemini,
+    'openai': translate_llm,
+    'gemini': translate_llm,
     'google': translate_google,
     'azure': translate_azure,
     'deeplx': translate_deeplx,
