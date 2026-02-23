@@ -237,15 +237,12 @@ async def translate_azure(text: str, source_lang: str, target_lang: str, session
 async def translate_llm(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
     if translation_service == 'openai':
         prompt = openai_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
-        api_base = openai_url.removesuffix('/chat/completions')
-        model = f"openai/{openai_model}"
+        api_base = openai_url.removesuffix('/v1/chat/completions').removesuffix('/chat/completions')
+        model = f"ollama_chat/{openai_model}"
         api_key = openai_api_key
         temperature = openai_temperature
         extra_params = {
-            'presence_penalty': 0,
-            'frequency_penalty': 0,
-            'top_p': 1,
-            'extra_body': {'thinking': {'type': 'enabled', 'budget_tokens': 0}},
+            'think': False,
         }
     elif translation_service == 'gemini':
         prompt = gemini_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
