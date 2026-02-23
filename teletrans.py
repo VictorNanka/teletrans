@@ -11,7 +11,8 @@ from logging.handlers import RotatingFileHandler
 
 import aiohttp
 import emoji
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from azure.ai.translation.text import TextTranslationClient, TranslatorCredential
 from azure.ai.translation.text.models import InputTextItem
 from azure.core.exceptions import HttpResponseError
@@ -126,7 +127,7 @@ if translation_service == 'azure':
 if translation_service == 'gemini':
     if not gemini_config or not gemini_api_key:
         logger.error("Gemini translation service configuration is missing")
-    genai.configure(api_key=gemini_api_key)
+    gemini_client = genai.Client(api_key=gemini_api_key)
 
 
 def remove_links(text):
@@ -272,9 +273,18 @@ async def translate_openai(text, source_lang, target_lang, session):
 
 async def translate_gemini(text, source_lang, target_lang, session):
     prompt = gemini_prompt.replace('tgt_lang', all_langs.get(target_lang, target_lang))
-    model = genai.GenerativeModel(gemini_model, system_instruction=prompt)
-    response = model.generate_content(text, safety_settings="block_none",
-                                      generation_config=genai.types.GenerationConfig(temperature=gemini_temperature))
+    response = gemini_client.models.generate_content(
+        model=gemini_model,
+        contents=text,
+        config=genai_types.GenerateContentConfig(
+            system_instruction=prompt,
+            temperature=gemini_temperature,
+            safety_settings=[genai_types.SafetySetting(
+                category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                threshold="OFF",
+            )],
+        ),
+    )
     return target_lang, response.text.strip()
 
 
