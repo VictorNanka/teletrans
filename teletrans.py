@@ -255,7 +255,8 @@ async def translate_openai(text, source_lang, target_lang, session):
         'temperature': openai_temperature,
         'presence_penalty': 0,
         'frequency_penalty': 0,
-        'top_p': 1
+        'top_p': 1,
+        'thinking': {'type': 'enabled', 'budget_tokens': 0}
     }
 
     start_time = time.time()
@@ -399,30 +400,26 @@ async def translate_and_edit(message, message_content, source_lang, target_langs
     if not translated_texts:
         return
 
-    modified_message = translated_texts[target_langs[0]]
+    # Build translation text from all target languages
+    all_translations = []
+    for lang in target_langs:
+        if lang in translated_texts:
+            all_translations.append(translated_texts[lang])
+    translation_text = '\n'.join(all_translations)
 
-    if len(target_langs) > 1:
-        secondary_messages = []
-        for lang in target_langs[1:]:
-            secondary_messages.append(translated_texts[lang])
-
-        modified_message += '\n%s' % '\n'.join(secondary_messages)
+    # Keep original text and append translation as blockquote
+    modified_message = message_content + '\n' + translation_text
 
     # Handle special characters such as emojis and other unicode characters
     pattern = u'[\U00010000-\U0010ffff]'
-    matches = len(re.findall(pattern, message_content))
+    pattern_matches_original = len(re.findall(pattern, message_content))
+    pattern_matches_translation = len(re.findall(pattern, translation_text))
 
-    # Extract repeated computations
-    translated_text = translated_texts[target_langs[0]]
-    pattern_matches_translated = len(re.findall(pattern, translated_text))
-    pattern_matches_modified = len(re.findall(pattern, modified_message))
+    # Blockquote starts after original text + newline
+    offset = len(message_content) + pattern_matches_original + 1
+    length = len(translation_text) + pattern_matches_translation
 
-    # Calculate offsets and lengths
-    offset = len(translated_text) + pattern_matches_translated + 1
-    length = len(modified_message) - len(translated_text) + pattern_matches_modified - pattern_matches_translated - 1
-
-    if collapsed_length > 0 and len(modified_message) - offset > collapsed_length:
-        # Create MessageEntityBlockquote with calculated values
+    if collapsed_length > 0 and length > collapsed_length:
         formatting_entities = [MessageEntityBlockquote(offset=offset, length=length, collapsed=True)]
     else:
         formatting_entities = [MessageEntityBlockquote(offset=offset, length=length)]
