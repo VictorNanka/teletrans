@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Callable, Coroutine
 from logging.handlers import RotatingFileHandler
 
 import aiohttp
@@ -137,6 +138,9 @@ def remove_links(text: str) -> str:
     return re.sub(url_pattern, '', text).strip()
 
 
+_TRANSLATION_DISPATCH: dict[str, Callable[..., Coroutine]] = {}
+
+
 async def translate_text(text: str, source_lang: str, target_langs: list[str]) -> dict[str, str]:
     result = {}
     if emoji.purely_emoji(text):
@@ -144,29 +148,28 @@ async def translate_text(text: str, source_lang: str, target_langs: list[str]) -
     detect_lang = detector.detect_language_of(text).iso_code_639_1.name.lower()
     if detect_lang in target_langs and detect_lang != source_lang:
         return result
+
+    translate_fn = _TRANSLATION_DISPATCH.get(translation_service)
+    if translate_fn is None:
+        raise ValueError(
+            f"Unknown translation service: {translation_service}. "
+            f"Available: {', '.join(_TRANSLATION_DISPATCH)}")
+
     async with aiohttp.ClientSession() as session:
-        tasks = []
         text_without_link = remove_links(text)
-        for target_lang in target_langs:
-            if source_lang == target_lang:
-                result[target_lang] = text
-                continue
-            if translation_service == 'openai':
-                tasks.append(translate_openai(text_without_link, source_lang, target_lang, session))
-            elif translation_service == 'gemini':
-                tasks.append(translate_gemini(text_without_link, source_lang, target_lang, session))
-            elif translation_service == 'google':
-                tasks.append(translate_google(text_without_link, source_lang, target_lang, session))
-            elif translation_service == 'azure':
-                tasks.append(translate_azure(text_without_link, source_lang, target_lang, session))
-            elif translation_service == 'deeplx':
-                tasks.append(translate_deeplx(text_without_link, source_lang, target_lang, session))
-            else:
-                raise ValueError(
-                    f"Unknown translation service: {translation_service}. Available services: openai, google, azure, deeplx")
         # Execute translation tasks concurrently
-        for lang, text in await asyncio.gather(*tasks):
-            result[lang] = text
+        async with asyncio.TaskGroup() as tg:
+            task_handles = []
+            for target_lang in target_langs:
+                if source_lang == target_lang:
+                    result[target_lang] = text
+                    continue
+                task_handles.append(tg.create_task(
+                    translate_fn(text_without_link, source_lang, target_lang, session)
+                ))
+        for handle in task_handles:
+            lang, translated = handle.result()
+            result[lang] = translated
     return result
 
 
@@ -286,6 +289,15 @@ async def translate_gemini(text: str, source_lang: str, target_lang: str, sessio
         ),
     )
     return target_lang, response.text.strip()
+
+
+_TRANSLATION_DISPATCH.update({
+    'openai': translate_openai,
+    'gemini': translate_gemini,
+    'google': translate_google,
+    'azure': translate_azure,
+    'deeplx': translate_deeplx,
+})
 
 
 async def command_mode(event: events.NewMessage.Event, target_key: str, text: str) -> None:
