@@ -9,8 +9,8 @@ dependencies = [
     "azure-core==1.38.1",
     "emoji==2.15.0",
     "google-cloud-translate==3.20.0",
-    "google-genai==1.16.1",
     "lingua-language-detector==2.1.1",
+    "litellm>=1.81.14",
     "protobuf==5.29.5",
     "telethon==1.42.0",
 ]
