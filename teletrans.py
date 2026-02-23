@@ -213,8 +213,8 @@ async def translate_azure(text, source_lang, target_lang, session):
         target_languages = [target_lang]
         input_text_elements = [InputTextItem(text=text)]
 
-        response = text_translator.translate(content=input_text_elements, to=target_languages,
-                                             from_parameter=source_language)
+        response = text_translator.translate(body=input_text_elements, to_language=target_languages,
+                                             from_language=source_language)
         translation = response[0] if response else None
 
         if translation:
