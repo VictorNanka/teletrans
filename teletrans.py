@@ -55,7 +55,7 @@ def load_config() -> dict:
     # load config from json file, check if the file exists first
     if not os.path.exists(f'{workspace}/config.json'):
         logger.error('config.json not found, created an empty one')
-        exit()
+        sys.exit(1)
 
     with open(f'{workspace}/config.json', 'r') as f:
         config = json.load(f)
@@ -112,7 +112,7 @@ client = TelegramClient(f'{workspace}/client', api_id, api_hash)
 if translation_service == 'google':
     if not google_creds:
         logger.error("Google translation service configuration is missing")
-        exit()
+        sys.exit(1)
     google_credentials = service_account.Credentials.from_service_account_info(google_creds)
     google_client = translate.Client(credentials=google_credentials)
 
@@ -120,7 +120,7 @@ if translation_service == 'google':
 if translation_service == 'azure':
     if not azure_key or not azure_endpoint or not azure_region:
         logger.error("Azure translation service configuration is missing")
-        exit()
+        sys.exit(1)
     text_translator = TextTranslationClient(endpoint=azure_endpoint,
                                             credential=TranslatorCredential(azure_key, azure_region))
 
@@ -162,7 +162,7 @@ async def translate_text(text: str, source_lang: str, target_langs: list[str]) -
             elif translation_service == 'deeplx':
                 tasks.append(translate_deeplx(text_without_link, source_lang, target_lang, session))
             else:
-                raise Exception(
+                raise ValueError(
                     f"Unknown translation service: {translation_service}. Available services: openai, google, azure, deeplx")
         # Execute translation tasks concurrently
         for lang, text in await asyncio.gather(*tasks):
@@ -196,12 +196,12 @@ async def translate_deeplx(text: str, source_lang: str, target_lang: str, sessio
         logger.info(f"Translation from {source_lang} to {target_lang} took: {time.time() - start_time}")
         if response.status != 200:
             logger.error(f"Translation failed: {response.status}")
-            raise Exception(f"Translation failed")
+            raise RuntimeError(f"Translation failed: {response.status}")
 
         result = await response.json()
         if result['code'] != 200:
             logger.error(f"Translation failed: {result}")
-            raise Exception(f"Translation failed")
+            raise RuntimeError(f"Translation failed: {result}")
 
     return target_lang, result['data']
 
@@ -267,8 +267,8 @@ async def translate_openai(text: str, source_lang: str, target_lang: str, sessio
         result = json.loads(response_text)
         try:
             return target_lang, result['choices'][0]['message']['content']
-        except Exception as e:
-            raise Exception(f"OpenAI translation failed: {response_text} {e}")
+        except (KeyError, IndexError) as e:
+            raise RuntimeError(f"OpenAI translation failed: {response_text} {e}")
 
 
 async def translate_gemini(text: str, source_lang: str, target_lang: str, session: aiohttp.ClientSession) -> tuple[str, str]:
@@ -329,7 +329,7 @@ async def command_mode(event: events.NewMessage.Event, target_key: str, text: st
         await translate_and_edit(event.message, raw_text, source_lang, target_langs.split('|'))
         return
 
-    await event.message.edit("未知命令")
+    await event.message.edit("Unknown command")
     await asyncio.sleep(3)
     await event.message.delete()
 
@@ -399,7 +399,7 @@ async def handle_message(event: events.NewMessage.Event) -> None:
 
     except Exception as e:
         # Log exception during message handling
-        logger.error(f"Error handling message: {e}")
+        logger.exception("Error handling message")
 
 
 async def translate_and_edit(message, message_content: str, source_lang: str, target_langs: list[str]) -> None:
